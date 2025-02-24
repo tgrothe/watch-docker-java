@@ -9,7 +9,7 @@ plugins {
     id 'com.github.spotbugs' version "${spotbugsVersion}"
 }
 
-version = '1.0'
+//version = '1.0'
 
 application {
     mainClass.set(System.getProperty('main_class') ?: 'Main')
@@ -20,7 +20,11 @@ repositories {
 }
 
 dependencies {
+    // https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
+    implementation 'org.slf4j:slf4j-simple:2.0.16'
+
     implementation depsArray.lang3
+    implementation depsArray.sshj
 }
 
 java {
