@@ -1,12 +1,28 @@
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 
 public class Main {
+  private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
+
+  private static void logWarning(Exception e) {
+    StringBuilder warning = new StringBuilder();
+    warning.append(e.getMessage());
+    StackTraceElement[] stackTrace = e.getStackTrace();
+    for (StackTraceElement element : stackTrace) {
+      warning.append(element.toString()).append(System.lineSeparator());
+    }
+    LOGGER.warning(warning.toString());
+
+    JOptionPane.showMessageDialog(null, e.getMessage());
+  }
+
   private static final String HOST;
   private static final int PORT;
   private static final String USERNAME;
@@ -19,7 +35,7 @@ public class Main {
           new BufferedReader(new FileReader(hostData, StandardCharsets.UTF_8))) {
         lines = reader.lines().toArray(String[]::new);
       } catch (IOException e) {
-        e.printStackTrace();
+        logWarning(e);
       }
       HOST = lines[0];
       PORT = Integer.parseInt(lines[1]);
@@ -41,7 +57,7 @@ public class Main {
         ssh.connect(HOST, PORT);
         ssh.authPublickey(USERNAME);
       } catch (IOException e) {
-        e.printStackTrace();
+        logWarning(e);
         close(null);
       }
     }
@@ -51,14 +67,14 @@ public class Main {
         try {
           session.close();
         } catch (IOException e) {
-          e.printStackTrace();
+          logWarning(e);
         }
       }
       if (ssh != null) {
         try {
           ssh.disconnect();
         } catch (IOException e) {
-          e.printStackTrace();
+          logWarning(e);
         }
       }
     }
@@ -67,7 +83,7 @@ public class Main {
       try {
         return ssh.startSession();
       } catch (IOException e) {
-        e.printStackTrace();
+        logWarning(e);
         close(null);
       }
       return null;
@@ -89,11 +105,52 @@ public class Main {
         result = reader.lines().toArray(String[]::new);
       }
     } catch (IOException e) {
-      e.printStackTrace();
+      logWarning(e);
     } finally {
       connection.close(session);
     }
     return result;
+  }
+
+  private static class MyActionListener implements ActionListener {
+    private final JFrame frame;
+    private final JTable table;
+    private final DefaultTableModel model;
+    private final String command;
+
+    private MyActionListener(JFrame frame, JTable table, DefaultTableModel model, String command) {
+      this.frame = frame;
+      this.table = table;
+      this.model = model;
+      this.command = command;
+    }
+
+    @Override
+    public void actionPerformed(java.awt.event.ActionEvent e) {
+      enableGUI(frame, false);
+      int row = table.getSelectedRow();
+      if (row != -1) {
+        String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
+        MyConnection connection = new MyConnection();
+        Session session = connection.getSession();
+        try {
+          Session.Command cmd = session.exec(command + " " + containerId);
+          try (BufferedReader reader =
+              new BufferedReader(
+                  new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
+            String line = reader.readLine();
+            if (line != null) {
+              JOptionPane.showMessageDialog(frame, line);
+            }
+          }
+        } catch (IOException ex) {
+          logWarning(ex);
+        } finally {
+          connection.close(session);
+        }
+      }
+      enableGUI(frame, true);
+    }
   }
 
   private static void showGUI() {
@@ -145,6 +202,7 @@ public class Main {
 
     button1.addActionListener(
         e -> {
+          enableGUI(frame, false);
           String[] tableArray = getTableArray();
           model.setRowCount(0);
           for (String line : tableArray) {
@@ -152,86 +210,24 @@ public class Main {
               continue;
             }
             String[] rowData = line.split("\\s{2,}");
-            String[] temp = rowData[3].split(" / ");
             String[] rowData2 = new String[rowData.length + 1];
+            String[] temp = rowData[3].split(" / ");
             System.arraycopy(rowData, 0, rowData2, 0, 3);
             System.arraycopy(temp, 0, rowData2, 3, 2);
             System.arraycopy(rowData, 4, rowData2, 5, rowData.length - 4);
             model.addRow(rowData2);
           }
           model.fireTableDataChanged();
+          enableGUI(frame, true);
         });
-    button2.addActionListener(
-        e -> {
-          int row = table.getSelectedRow();
-          if (row != -1) {
-            String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
-            MyConnection connection = new MyConnection();
-            Session session = connection.getSession();
-            try {
-              Session.Command cmd = session.exec("docker stop " + containerId);
-              try (BufferedReader reader =
-                  new BufferedReader(
-                      new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
-                String line = reader.readLine();
-                if (line != null) {
-                  JOptionPane.showMessageDialog(frame, line);
-                }
-              }
-            } catch (IOException ex) {
-              ex.printStackTrace();
-            } finally {
-              connection.close(session);
-            }
-          }
-        });
-    button3.addActionListener(
-        e -> {
-          int row = table.getSelectedRow();
-          if (row != -1) {
-            String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
-            MyConnection connection = new MyConnection();
-            Session session = connection.getSession();
-            try {
-              Session.Command cmd = session.exec("docker start " + containerId);
-              try (BufferedReader reader =
-                  new BufferedReader(
-                      new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
-                String line = reader.readLine();
-                if (line != null) {
-                  JOptionPane.showMessageDialog(frame, line);
-                }
-              }
-            } catch (IOException ex) {
-              ex.printStackTrace();
-            } finally {
-              connection.close(session);
-            }
-          }
-        });
-    button4.addActionListener(
-        e -> {
-          int row = table.getSelectedRow();
-          if (row != -1) {
-            String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
-            MyConnection connection = new MyConnection();
-            Session session = connection.getSession();
-            try {
-              Session.Command cmd = session.exec("docker restart " + containerId);
-              try (BufferedReader reader =
-                  new BufferedReader(
-                      new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
-                String line = reader.readLine();
-                if (line != null) {
-                  JOptionPane.showMessageDialog(frame, line);
-                }
-              }
-            } catch (IOException ex) {
-              ex.printStackTrace();
-            } finally {
-              connection.close(session);
-            }
-          }
-        });
+    button2.addActionListener(new MyActionListener(frame, table, model, "docker stop"));
+    button3.addActionListener(new MyActionListener(frame, table, model, "docker start"));
+    button4.addActionListener(new MyActionListener(frame, table, model, "docker restart"));
+  }
+
+  private static void enableGUI(JFrame frame, boolean enable) {
+    for (Component component : frame.getContentPane().getComponents()) {
+      component.setEnabled(enable);
+    }
   }
 }
