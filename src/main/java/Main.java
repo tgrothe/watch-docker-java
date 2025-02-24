@@ -1,5 +1,8 @@
+import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 
@@ -72,10 +75,7 @@ public class Main {
   }
 
   public static void main(String[] args) {
-    String[] tableArray = getTableArray();
-    for (String line : tableArray) {
-      System.out.println(line);
-    }
+    SwingUtilities.invokeLater(Main::showGUI);
   }
 
   private static String[] getTableArray() {
@@ -94,5 +94,144 @@ public class Main {
       connection.close(session);
     }
     return result;
+  }
+
+  private static void showGUI() {
+    JButton button1 = new JButton("Refresh");
+    JButton button2 = new JButton("Stop");
+    JButton button3 = new JButton("Start");
+    JButton button4 = new JButton("Restart");
+    button2.setEnabled(false);
+    button3.setEnabled(false);
+    button4.setEnabled(false);
+    JPanel panel1 = new JPanel(new GridLayout(1, 4));
+    panel1.add(button1);
+    panel1.add(button2);
+    panel1.add(button3);
+    panel1.add(button4);
+    JPanel panel2 = new JPanel(new BorderLayout());
+    panel2.add(panel1, BorderLayout.WEST);
+    String[] columnNames = {
+      "CONTAINER ID", "NAME", "CPU %", "MEM USAGE", "LIMIT", "MEM %", "NET I/O", "BLOCK I/O", "PIDS"
+    };
+    DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+    JTable table = new JTable(model);
+    table.setAutoCreateRowSorter(true);
+    table
+        .getSelectionModel()
+        .addListSelectionListener(
+            event -> {
+              if (event.getValueIsAdjusting()) {
+                return;
+              }
+              if (table.getSelectedRow() == -1) {
+                button2.setEnabled(false);
+                button3.setEnabled(false);
+                button4.setEnabled(false);
+              } else {
+                button2.setEnabled(true);
+                button3.setEnabled(true);
+                button4.setEnabled(true);
+              }
+            });
+    JScrollPane scrollPane = new JScrollPane(table);
+    JFrame frame = new JFrame("Docker Stats");
+    frame.setLayout(new BorderLayout());
+    frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    frame.setSize(1600, 800);
+    frame.add(panel2, BorderLayout.NORTH);
+    frame.add(scrollPane, BorderLayout.CENTER);
+    frame.setVisible(true);
+
+    button1.addActionListener(
+        e -> {
+          String[] tableArray = getTableArray();
+          model.setRowCount(0);
+          for (String line : tableArray) {
+            if (line.startsWith("CONTAINER ID")) {
+              continue;
+            }
+            String[] rowData = line.split("\\s{2,}");
+            String[] temp = rowData[3].split(" / ");
+            String[] rowData2 = new String[rowData.length + 1];
+            System.arraycopy(rowData, 0, rowData2, 0, 3);
+            System.arraycopy(temp, 0, rowData2, 3, 2);
+            System.arraycopy(rowData, 4, rowData2, 5, rowData.length - 4);
+            model.addRow(rowData2);
+          }
+          model.fireTableDataChanged();
+        });
+    button2.addActionListener(
+        e -> {
+          int row = table.getSelectedRow();
+          if (row != -1) {
+            String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
+            MyConnection connection = new MyConnection();
+            Session session = connection.getSession();
+            try {
+              Session.Command cmd = session.exec("docker stop " + containerId);
+              try (BufferedReader reader =
+                  new BufferedReader(
+                      new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
+                String line = reader.readLine();
+                if (line != null) {
+                  JOptionPane.showMessageDialog(frame, line);
+                }
+              }
+            } catch (IOException ex) {
+              ex.printStackTrace();
+            } finally {
+              connection.close(session);
+            }
+          }
+        });
+    button3.addActionListener(
+        e -> {
+          int row = table.getSelectedRow();
+          if (row != -1) {
+            String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
+            MyConnection connection = new MyConnection();
+            Session session = connection.getSession();
+            try {
+              Session.Command cmd = session.exec("docker start " + containerId);
+              try (BufferedReader reader =
+                  new BufferedReader(
+                      new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
+                String line = reader.readLine();
+                if (line != null) {
+                  JOptionPane.showMessageDialog(frame, line);
+                }
+              }
+            } catch (IOException ex) {
+              ex.printStackTrace();
+            } finally {
+              connection.close(session);
+            }
+          }
+        });
+    button4.addActionListener(
+        e -> {
+          int row = table.getSelectedRow();
+          if (row != -1) {
+            String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
+            MyConnection connection = new MyConnection();
+            Session session = connection.getSession();
+            try {
+              Session.Command cmd = session.exec("docker restart " + containerId);
+              try (BufferedReader reader =
+                  new BufferedReader(
+                      new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
+                String line = reader.readLine();
+                if (line != null) {
+                  JOptionPane.showMessageDialog(frame, line);
+                }
+              }
+            } catch (IOException ex) {
+              ex.printStackTrace();
+            } finally {
+              connection.close(session);
+            }
+          }
+        });
   }
 }
