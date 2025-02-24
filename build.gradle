@@ -1,0 +1,51 @@
+buildscript {
+    apply from: 'dependencies.gradle'
+}
+
+plugins {
+    id 'application'
+    id 'com.diffplug.spotless' version "${spotlessVersion}"
+    id 'com.github.ben-manes.versions' version "${benmanesVersion}"
+    id 'com.github.spotbugs' version "${spotbugsVersion}"
+}
+
+version = '1.0'
+
+application {
+    mainClass.set(System.getProperty('main_class') ?: 'Main')
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation depsArray.lang3
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+spotless {
+    java {
+        target 'src/**/*.java'
+        googleJavaFormat()
+    }
+}
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': 'Main'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude('META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA')
+}
+
+run {
+    standardInput = System.in
+}
