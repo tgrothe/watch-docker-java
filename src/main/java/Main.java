@@ -2,9 +2,14 @@ import java.awt.*;
 import java.awt.event.ActionListener;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableRowSorter;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 
@@ -99,7 +104,7 @@ public class Main {
     MyConnection connection = new MyConnection();
     Session session = connection.getSession();
     try {
-      Session.Command cmd = session.exec("docker stats --no-stream | sort -k 2");
+      Session.Command cmd = session.exec("docker stats -a --no-stream | sort -k 2");
       try (BufferedReader reader =
           new BufferedReader(new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
         result = reader.lines().toArray(String[]::new);
@@ -112,19 +117,8 @@ public class Main {
     return result;
   }
 
-  private static class MyActionListener implements ActionListener {
-    private final JFrame frame;
-    private final JTable table;
-    private final DefaultTableModel model;
-    private final String command;
-
-    private MyActionListener(JFrame frame, JTable table, DefaultTableModel model, String command) {
-      this.frame = frame;
-      this.table = table;
-      this.model = model;
-      this.command = command;
-    }
-
+  private record MyActionListener(JFrame frame, JTable table, MyTableModel model, String command)
+      implements ActionListener {
     @Override
     public void actionPerformed(java.awt.event.ActionEvent e) {
       enableGUI(frame, false);
@@ -153,6 +147,129 @@ public class Main {
     }
   }
 
+  public static class MyTableModel extends AbstractTableModel {
+    private final String[] columnNames = {
+      "CONTAINER ID",
+      "NAME",
+      "CPU %",
+      "MEM USAGE",
+      "LIMIT",
+      "MEM %",
+      "NET I",
+      "NET O",
+      "BLOCK I",
+      "BLOCK O",
+      "PIDS",
+      "RUNS"
+    };
+
+    private final ArrayList<ArrayList<Object>> data = new ArrayList<>();
+
+    public void update() {
+      data.clear();
+      String[] tableArray = getTableArray();
+      for (String line : tableArray) {
+        addRow(line);
+      }
+      fireTableDataChanged();
+    }
+
+    private void addRow(String line) {
+      if (line.startsWith("CONTAINER ID")) {
+        return;
+      }
+      String[] rowData = line.split("\\s{2,}");
+      String[] temp1 = rowData[3].split(" / ");
+      String[] temp2 = rowData[5].split(" / ");
+      String[] temp3 = rowData[6].split(" / ");
+      ArrayList<Object> row = new ArrayList<>();
+      row.add(rowData[0]);
+      row.add(rowData[1]);
+      row.add(rowData[2]);
+      row.add(temp1[0]);
+      row.add(temp1[1]);
+      row.add(rowData[4]);
+      row.add(temp2[0]);
+      row.add(temp2[1]);
+      row.add(temp3[0]);
+      row.add(temp3[1]);
+      row.add(rowData[7]);
+      row.add("0".equals(rowData[7]) ? "No" : "Yes");
+      data.add(row);
+    }
+
+    @Override
+    public int getRowCount() {
+      return data.size();
+    }
+
+    @Override
+    public int getColumnCount() {
+      return columnNames.length;
+    }
+
+    @Override
+    public String getColumnName(int column) {
+      return columnNames[column];
+    }
+
+    @Override
+    public Object getValueAt(int rowIndex, int columnIndex) {
+      return data.get(rowIndex).get(columnIndex);
+    }
+
+    public TableRowSorter<MyTableModel> getSorter() {
+      TableRowSorter<MyTableModel> sorter = new TableRowSorter<>(this);
+      TreeMap<String, Long> map =
+          new TreeMap<>(
+              (s1, s2) -> {
+                int l1 = s1.length();
+                int l2 = s2.length();
+                if (l1 != l2) {
+                  return Integer.compare(l2, l1);
+                }
+                return s1.compareTo(s2);
+              });
+      map.put("%", 1L);
+      map.put("B", 1L);
+      map.put("KiB", 1024L);
+      map.put("MiB", 1024L * 1024L);
+      map.put("GiB", 1024L * 1024L * 1024L);
+      map.put("kB", 1000L);
+      map.put("MB", 1000L * 1000L);
+      map.put("GB", 1000L * 1000L * 1000L);
+      Comparator<String> comparator =
+          (o1, o2) -> {
+            Double d1 = null;
+            for (Map.Entry<String, Long> entry : map.entrySet()) {
+              if (o1.endsWith(entry.getKey())) {
+                d1 =
+                    Double.parseDouble(o1.substring(0, o1.length() - entry.getKey().length()))
+                        * entry.getValue();
+                break;
+              }
+            }
+            Double d2 = null;
+            for (Map.Entry<String, Long> entry : map.entrySet()) {
+              if (o2.endsWith(entry.getKey())) {
+                d2 =
+                    Double.parseDouble(o2.substring(0, o2.length() - entry.getKey().length()))
+                        * entry.getValue();
+                break;
+              }
+            }
+            if (d1 == null || d2 == null) {
+              return o1.compareTo(o2);
+            }
+            return Double.compare(d1, d2);
+          };
+      for (int i = 0; i < columnNames.length; i++) {
+        sorter.setComparator(i, comparator);
+      }
+      return sorter;
+    }
+  }
+
   private static void showGUI() {
     JButton button1 = new JButton("Refresh");
     JButton button2 = new JButton("Stop");
@@ -168,12 +285,9 @@ public class Main {
     panel1.add(button4);
     JPanel panel2 = new JPanel(new BorderLayout());
     panel2.add(panel1, BorderLayout.WEST);
-    String[] columnNames = {
-      "CONTAINER ID", "NAME", "CPU %", "MEM USAGE", "LIMIT", "MEM %", "NET I/O", "BLOCK I/O", "PIDS"
-    };
-    DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+    MyTableModel model = new MyTableModel();
     JTable table = new JTable(model);
-    table.setAutoCreateRowSorter(true);
+    table.setRowSorter(model.getSorter());
     table
         .getSelectionModel()
         .addListSelectionListener(
@@ -203,21 +317,7 @@ public class Main {
     button1.addActionListener(
         e -> {
           enableGUI(frame, false);
-          String[] tableArray = getTableArray();
-          model.setRowCount(0);
-          for (String line : tableArray) {
-            if (line.startsWith("CONTAINER ID")) {
-              continue;
-            }
-            String[] rowData = line.split("\\s{2,}");
-            String[] rowData2 = new String[rowData.length + 1];
-            String[] temp = rowData[3].split(" / ");
-            System.arraycopy(rowData, 0, rowData2, 0, 3);
-            System.arraycopy(temp, 0, rowData2, 3, 2);
-            System.arraycopy(rowData, 4, rowData2, 5, rowData.length - 4);
-            model.addRow(rowData2);
-          }
-          model.fireTableDataChanged();
+          model.update();
           enableGUI(frame, true);
         });
     button2.addActionListener(new MyActionListener(frame, table, model, "docker stop"));
