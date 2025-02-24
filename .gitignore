@@ -2,3 +2,4 @@
 .idea/
 build/
 gradlew.bat
+my_host_data.txt
