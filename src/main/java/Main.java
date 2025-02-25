@@ -1,11 +1,9 @@
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
@@ -120,19 +118,18 @@ public class Main {
 
   private record ButtonGroup(
       JButton button1, JButton button2, JButton button3, JButton button4, JButton button5) {
-    public void enable(boolean enable) {
-      button2.setEnabled(enable);
-      button3.setEnabled(enable);
-      button4.setEnabled(enable);
-      button5.setEnabled(enable);
+    public void setEnabled(boolean enabled) {
+      button2.setEnabled(enabled);
+      button3.setEnabled(enabled);
+      button4.setEnabled(enabled);
+      button5.setEnabled(enabled);
     }
   }
 
-  private record MyActionListener(JFrame frame, JTable table, MyTableModel model, String command)
-      implements ActionListener {
+  private record CommandActionListener(
+      JFrame frame, JTable table, MyTableModel model, String command) implements ActionListener {
     @Override
-    public void actionPerformed(java.awt.event.ActionEvent e) {
-      enableGUI(frame, false);
+    public void actionPerformed(ActionEvent e) {
       int row = table.getSelectedRow();
       if (row != -1) {
         String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
@@ -156,13 +153,12 @@ public class Main {
           connection.close(session);
         }
       }
-      enableGUI(frame, true);
     }
   }
 
-  private record MyActionListenerLogs(JTable table, MyTableModel model) implements ActionListener {
+  private record LogActionListener(JTable table, MyTableModel model) implements ActionListener {
     @Override
-    public void actionPerformed(java.awt.event.ActionEvent e) {
+    public void actionPerformed(ActionEvent e) {
       int row = table.getSelectedRow();
       if (row != -1) {
         String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
@@ -353,7 +349,7 @@ public class Main {
             new JButton("Start"),
             new JButton("Restart"),
             new JButton("Show Logs"));
-    buttonGroup.enable(false);
+    buttonGroup.setEnabled(false);
     JPanel panel1 = new JPanel(new GridLayout(1, 4));
     panel1.add(buttonGroup.button1());
     panel1.add(buttonGroup.button2());
@@ -372,7 +368,7 @@ public class Main {
               if (event.getValueIsAdjusting()) {
                 return;
               }
-              buttonGroup.enable(table.getSelectedRow() != -1);
+              buttonGroup.setEnabled(table.getSelectedRow() != -1);
             });
     JScrollPane scrollPane = new JScrollPane(table);
     JFrame frame = new JFrame("Docker Stats");
@@ -383,29 +379,16 @@ public class Main {
     frame.add(scrollPane, BorderLayout.CENTER);
     frame.setVisible(true);
 
-    buttonGroup
-        .button1()
-        .addActionListener(
-            e -> {
-              enableGUI(frame, false);
-              model.update();
-              enableGUI(frame, true);
-            });
+    buttonGroup.button1().addActionListener(e -> model.update());
     buttonGroup
         .button2()
-        .addActionListener(new MyActionListener(frame, table, model, "docker stop"));
+        .addActionListener(new CommandActionListener(frame, table, model, "docker stop"));
     buttonGroup
         .button3()
-        .addActionListener(new MyActionListener(frame, table, model, "docker start"));
+        .addActionListener(new CommandActionListener(frame, table, model, "docker start"));
     buttonGroup
         .button4()
-        .addActionListener(new MyActionListener(frame, table, model, "docker restart"));
-    buttonGroup.button5().addActionListener(new MyActionListenerLogs(table, model));
-  }
-
-  private static void enableGUI(JFrame frame, boolean enable) {
-    for (Component component : frame.getContentPane().getComponents()) {
-      component.setEnabled(enable);
-    }
+        .addActionListener(new CommandActionListener(frame, table, model, "docker restart"));
+    buttonGroup.button5().addActionListener(new LogActionListener(table, model));
   }
 }
