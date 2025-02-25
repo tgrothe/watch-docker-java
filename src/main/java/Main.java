@@ -12,13 +12,14 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableRowSorter;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
+import net.schmizz.sshj.connection.channel.direct.Signal;
 
 public class Main {
   private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
 
   private static void logWarning(Exception e) {
     StringBuilder warning = new StringBuilder();
-    warning.append(e.getMessage());
+    warning.append(e.getMessage()).append(System.lineSeparator());
     StackTraceElement[] stackTrace = e.getStackTrace();
     for (StackTraceElement element : stackTrace) {
       warning.append(element.toString()).append(System.lineSeparator());
@@ -117,6 +118,16 @@ public class Main {
     return result;
   }
 
+  private record ButtonGroup(
+      JButton button1, JButton button2, JButton button3, JButton button4, JButton button5) {
+    public void enable(boolean enable) {
+      button2.setEnabled(enable);
+      button3.setEnabled(enable);
+      button4.setEnabled(enable);
+      button5.setEnabled(enable);
+    }
+  }
+
   private record MyActionListener(JFrame frame, JTable table, MyTableModel model, String command)
       implements ActionListener {
     @Override
@@ -132,10 +143,12 @@ public class Main {
           try (BufferedReader reader =
               new BufferedReader(
                   new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
-            String line = reader.readLine();
-            if (line != null) {
-              JOptionPane.showMessageDialog(frame, line);
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+              output.append(line).append(System.lineSeparator());
             }
+            JOptionPane.showMessageDialog(frame, output.toString());
           }
         } catch (IOException ex) {
           logWarning(ex);
@@ -144,6 +157,68 @@ public class Main {
         }
       }
       enableGUI(frame, true);
+    }
+  }
+
+  private record MyActionListenerLogs(JTable table, MyTableModel model) implements ActionListener {
+    @Override
+    public void actionPerformed(java.awt.event.ActionEvent e) {
+      int row = table.getSelectedRow();
+      if (row != -1) {
+        String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
+        String isRunning = (String) model.getValueAt(table.convertRowIndexToModel(row), 11);
+
+        JFrame logsFrame = new JFrame("Logs " + containerId);
+        logsFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        logsFrame.setSize(1200, 600);
+        JTextArea textArea = new JTextArea();
+        textArea.setEditable(false);
+        logsFrame.add(new JScrollPane(textArea));
+        logsFrame.setVisible(true);
+
+        new Thread(
+                () -> {
+                  MyConnection connection = new MyConnection();
+                  Session session = connection.getSession();
+                  try {
+                    Session.Command cmd =
+                        session.exec("docker logs -tf --tail 1000 " + containerId);
+                    logsFrame.addWindowListener(
+                        new java.awt.event.WindowAdapter() {
+                          @Override
+                          public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                            if (cmd.isOpen()) {
+                              try {
+                                cmd.signal(Signal.INT);
+                              } catch (IOException ex) {
+                                logWarning(ex);
+                              }
+                            }
+                          }
+                        });
+
+                    try (BufferedReader reader =
+                        new BufferedReader(
+                            new InputStreamReader(cmd.getInputStream(), StandardCharsets.UTF_8))) {
+                      String line;
+                      while ((line = reader.readLine()) != null) {
+                        textArea.append(line + "\n");
+                        textArea.setCaretPosition(textArea.getDocument().getLength());
+                      }
+                    }
+
+                    if ("Yes".equals(isRunning)) {
+                      // The container was running before listener call and now stopped
+                      logsFrame.dispose();
+                    }
+                  } catch (IOException ex) {
+                    logWarning(ex);
+                  } finally {
+                    connection.close(session);
+                  }
+                })
+            .start();
+      }
     }
   }
 
@@ -271,18 +346,20 @@ public class Main {
   }
 
   private static void showGUI() {
-    JButton button1 = new JButton("Refresh");
-    JButton button2 = new JButton("Stop");
-    JButton button3 = new JButton("Start");
-    JButton button4 = new JButton("Restart");
-    button2.setEnabled(false);
-    button3.setEnabled(false);
-    button4.setEnabled(false);
+    ButtonGroup buttonGroup =
+        new ButtonGroup(
+            new JButton("Refresh"),
+            new JButton("Stop"),
+            new JButton("Start"),
+            new JButton("Restart"),
+            new JButton("Show Logs"));
+    buttonGroup.enable(false);
     JPanel panel1 = new JPanel(new GridLayout(1, 4));
-    panel1.add(button1);
-    panel1.add(button2);
-    panel1.add(button3);
-    panel1.add(button4);
+    panel1.add(buttonGroup.button1());
+    panel1.add(buttonGroup.button2());
+    panel1.add(buttonGroup.button3());
+    panel1.add(buttonGroup.button4());
+    panel1.add(buttonGroup.button5());
     JPanel panel2 = new JPanel(new BorderLayout());
     panel2.add(panel1, BorderLayout.WEST);
     MyTableModel model = new MyTableModel();
@@ -295,15 +372,7 @@ public class Main {
               if (event.getValueIsAdjusting()) {
                 return;
               }
-              if (table.getSelectedRow() == -1) {
-                button2.setEnabled(false);
-                button3.setEnabled(false);
-                button4.setEnabled(false);
-              } else {
-                button2.setEnabled(true);
-                button3.setEnabled(true);
-                button4.setEnabled(true);
-              }
+              buttonGroup.enable(table.getSelectedRow() != -1);
             });
     JScrollPane scrollPane = new JScrollPane(table);
     JFrame frame = new JFrame("Docker Stats");
@@ -314,15 +383,24 @@ public class Main {
     frame.add(scrollPane, BorderLayout.CENTER);
     frame.setVisible(true);
 
-    button1.addActionListener(
-        e -> {
-          enableGUI(frame, false);
-          model.update();
-          enableGUI(frame, true);
-        });
-    button2.addActionListener(new MyActionListener(frame, table, model, "docker stop"));
-    button3.addActionListener(new MyActionListener(frame, table, model, "docker start"));
-    button4.addActionListener(new MyActionListener(frame, table, model, "docker restart"));
+    buttonGroup
+        .button1()
+        .addActionListener(
+            e -> {
+              enableGUI(frame, false);
+              model.update();
+              enableGUI(frame, true);
+            });
+    buttonGroup
+        .button2()
+        .addActionListener(new MyActionListener(frame, table, model, "docker stop"));
+    buttonGroup
+        .button3()
+        .addActionListener(new MyActionListener(frame, table, model, "docker start"));
+    buttonGroup
+        .button4()
+        .addActionListener(new MyActionListener(frame, table, model, "docker restart"));
+    buttonGroup.button5().addActionListener(new MyActionListenerLogs(table, model));
   }
 
   private static void enableGUI(JFrame frame, boolean enable) {
