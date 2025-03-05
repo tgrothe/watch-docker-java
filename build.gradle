@@ -21,7 +21,7 @@ repositories {
 
 dependencies {
     // https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
-    implementation 'org.slf4j:slf4j-simple:2.0.16'
+    implementation 'org.slf4j:slf4j-simple:2.0.17'
 
     implementation depsArray.lang3
     implementation depsArray.sshj
