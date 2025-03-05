@@ -307,25 +307,24 @@ public class Main {
 
         @Override
         public void toggleSortOrder(int column) {
-          SortKey old = null;
+          boolean isPresent = false;
           for (Iterator<SortKey> it = sortKeys.iterator(); it.hasNext(); ) {
             SortKey sortKey = it.next();
             if (sortKey.getColumn() == column) {
-              old = sortKey;
+              isPresent = true;
               it.remove();
+              sortKeys.add(
+                  0,
+                  new SortKey(
+                      column,
+                      sortKey.getSortOrder() == SortOrder.ASCENDING
+                          ? SortOrder.DESCENDING
+                          : SortOrder.ASCENDING));
               break;
             }
           }
-          if (old == null) {
+          if (!isPresent) {
             sortKeys.add(0, new SortKey(column, SortOrder.ASCENDING));
-          } else {
-            sortKeys.add(
-                0,
-                new SortKey(
-                    column,
-                    old.getSortOrder() == SortOrder.ASCENDING
-                        ? SortOrder.DESCENDING
-                        : SortOrder.ASCENDING));
           }
           updateIndexes();
         }
