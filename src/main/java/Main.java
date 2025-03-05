@@ -410,7 +410,8 @@ public class Main {
             return;
           }
           isSorted = true;
-          for (SortKey sortKey : sortKeys.reversed()) {
+          for (int j = sortKeys.size() - 1; j >= 0; j--) {
+            SortKey sortKey = sortKeys.get(j);
             if (sortKey.getSortOrder() == SortOrder.UNSORTED) {
               continue;
             }
