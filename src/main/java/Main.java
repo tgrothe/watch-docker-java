@@ -4,10 +4,10 @@ import java.awt.event.ActionListener;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.List;
 import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
-import javax.swing.table.TableRowSorter;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 import net.schmizz.sshj.connection.channel.direct.Signal;
@@ -289,55 +289,205 @@ public class Main {
       return data.get(rowIndex).get(columnIndex);
     }
 
-    public TableRowSorter<MyTableModel> getSorter() {
-      TableRowSorter<MyTableModel> sorter = new TableRowSorter<>(this);
-      TreeMap<String, Long> map =
-          new TreeMap<>(
-              (s1, s2) -> {
-                int l1 = s1.length();
-                int l2 = s2.length();
-                if (l1 != l2) {
-                  return Integer.compare(l2, l1);
+    public RowSorter<MyTableModel> getSorter() {
+      return new RowSorter<>() {
+        final ArrayList<SortKey> sortKeys = new ArrayList<>();
+        int[] indexesModel = new int[0];
+        int[] indexesView = new int[0];
+        boolean isSorted = true;
+
+        {
+          updateIndexes();
+        }
+
+        @Override
+        public MyTableModel getModel() {
+          return MyTableModel.this;
+        }
+
+        @Override
+        public void toggleSortOrder(int column) {
+          boolean isPresent = false;
+          for (Iterator<SortKey> it = sortKeys.iterator(); it.hasNext(); ) {
+            SortKey sortKey = it.next();
+            if (sortKey.getColumn() == column) {
+              isPresent = true;
+              it.remove();
+              sortKeys.add(
+                  0,
+                  new SortKey(
+                      column,
+                      sortKey.getSortOrder() == SortOrder.ASCENDING
+                          ? SortOrder.DESCENDING
+                          : SortOrder.ASCENDING));
+              break;
+            }
+          }
+          if (!isPresent) {
+            sortKeys.add(0, new SortKey(column, SortOrder.ASCENDING));
+          }
+          updateIndexes();
+        }
+
+        @Override
+        public int convertRowIndexToModel(int index) {
+          sort();
+          return indexesView[index];
+        }
+
+        @Override
+        public int convertRowIndexToView(int index) {
+          sort();
+          return indexesModel[index];
+        }
+
+        @Override
+        public void setSortKeys(List<? extends SortKey> keys) {
+          sortKeys.clear();
+          sortKeys.addAll(keys);
+        }
+
+        @Override
+        public List<? extends SortKey> getSortKeys() {
+          return new ArrayList<>(sortKeys);
+        }
+
+        @Override
+        public int getViewRowCount() {
+          return getRowCount();
+        }
+
+        @Override
+        public int getModelRowCount() {
+          return getRowCount();
+        }
+
+        @Override
+        public void modelStructureChanged() {
+          updateIndexes();
+        }
+
+        @Override
+        public void allRowsChanged() {
+          updateIndexes();
+        }
+
+        @Override
+        public void rowsInserted(int firstRow, int endRow) {
+          updateIndexes();
+        }
+
+        @Override
+        public void rowsDeleted(int firstRow, int endRow) {
+          updateIndexes();
+        }
+
+        @Override
+        public void rowsUpdated(int firstRow, int endRow) {
+          updateIndexes();
+        }
+
+        @Override
+        public void rowsUpdated(int firstRow, int endRow, int column) {
+          updateIndexes();
+        }
+
+        private void updateIndexes() {
+          if (indexesModel.length != getModelRowCount()
+              || indexesView.length != getModelRowCount()) {
+            indexesModel = new int[getModelRowCount()];
+            indexesView = new int[getModelRowCount()];
+            for (int i = 0; i < getModelRowCount(); i++) {
+              indexesModel[i] = i;
+              indexesView[i] = i;
+            }
+          }
+          isSorted = false;
+        }
+
+        private void sort() {
+          if (isSorted) {
+            return;
+          }
+          isSorted = true;
+          for (int j = sortKeys.size() - 1; j >= 0; j--) {
+            SortKey sortKey = sortKeys.get(j);
+            if (sortKey.getSortOrder() == SortOrder.UNSORTED) {
+              continue;
+            }
+            int column = sortKey.getColumn();
+            Object[][] data1 = new Object[getModelRowCount()][2];
+            for (int i = 0; i < getModelRowCount(); i++) {
+              data1[convertRowIndexToView(i)][0] = i;
+            }
+            int type;
+            switch (column) {
+              case 0, 1, 11 -> {
+                for (int i = 0; i < getModelRowCount(); i++) {
+                  data1[convertRowIndexToView(i)][1] = getValueAt(i, column);
                 }
-                return s1.compareTo(s2);
-              });
-      map.put("%", 1L);
-      map.put("B", 1L);
-      map.put("KiB", 1024L);
-      map.put("MiB", 1024L * 1024L);
-      map.put("GiB", 1024L * 1024L * 1024L);
-      map.put("kB", 1000L);
-      map.put("MB", 1000L * 1000L);
-      map.put("GB", 1000L * 1000L * 1000L);
-      Comparator<String> comparator =
-          (o1, o2) -> {
-            Double d1 = null;
-            for (Map.Entry<String, Long> entry : map.entrySet()) {
-              if (o1.endsWith(entry.getKey())) {
-                d1 =
-                    Double.parseDouble(o1.substring(0, o1.length() - entry.getKey().length()))
-                        * entry.getValue();
-                break;
+                type = 0;
               }
-            }
-            Double d2 = null;
-            for (Map.Entry<String, Long> entry : map.entrySet()) {
-              if (o2.endsWith(entry.getKey())) {
-                d2 =
-                    Double.parseDouble(o2.substring(0, o2.length() - entry.getKey().length()))
-                        * entry.getValue();
-                break;
+              case 2, 5 -> {
+                for (int i = 0; i < getModelRowCount(); i++) {
+                  String s = (String) getValueAt(i, column);
+                  data1[convertRowIndexToView(i)][1] =
+                      Double.parseDouble(s.substring(0, s.length() - 1));
+                }
+                type = 1;
               }
+              case 3, 4, 6, 7, 8, 9 -> {
+                Object[][] temp = {
+                  {"KiB", 1024L},
+                  {"MiB", 1024L * 1024L},
+                  {"GiB", 1024L * 1024L * 1024L},
+                  {"kB", 1000L},
+                  {"MB", 1000L * 1000L},
+                  {"GB", 1000L * 1000L * 1000L},
+                  {"B", 1L}
+                };
+                for (int i = 0; i < getModelRowCount(); i++) {
+                  String s = (String) getValueAt(i, column);
+                  for (Object[] os : temp) {
+                    if (s.endsWith((String) os[0])) {
+                      data1[convertRowIndexToView(i)][1] =
+                          Double.parseDouble(s.substring(0, s.length() - ((String) os[0]).length()))
+                              * (Long) os[1];
+                      break;
+                    }
+                  }
+                }
+                type = 1;
+              }
+              case 10 -> {
+                for (int i = 0; i < getModelRowCount(); i++) {
+                  data1[convertRowIndexToView(i)][1] =
+                      Integer.parseInt((String) getValueAt(i, column));
+                }
+                type = 2;
+              }
+              default -> throw new IllegalStateException("Unexpected column value: " + column);
             }
-            if (d1 == null || d2 == null) {
-              return o1.compareTo(o2);
+            int finalType = type;
+            Arrays.sort(
+                data1,
+                (o1, o2) -> {
+                  int result;
+                  switch (finalType) {
+                    case 0 -> result = ((String) o1[1]).compareTo((String) o2[1]);
+                    case 1 -> result = Double.compare((double) o1[1], (double) o2[1]);
+                    case 2 -> result = Integer.compare((int) o1[1], (int) o2[1]);
+                    default -> throw new IllegalStateException();
+                  }
+                  return sortKey.getSortOrder() == SortOrder.ASCENDING ? result : -result;
+                });
+            for (int i = 0; i < getModelRowCount(); i++) {
+              indexesModel[(int) data1[i][0]] = i;
+              indexesView[i] = (int) data1[i][0];
             }
-            return Double.compare(d1, d2);
-          };
-      for (int i = 0; i < columnNames.length; i++) {
-        sorter.setComparator(i, comparator);
-      }
-      return sorter;
+          }
+        }
+      };
     }
   }
 
