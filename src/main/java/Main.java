@@ -291,9 +291,10 @@ public class Main {
 
     public RowSorter<MyTableModel> getSorter() {
       return new RowSorter<>() {
-        final ArrayList<SortKey> sortKeys = new ArrayList<>();
-        int[] indexesModel = new int[0];
-        int[] indexesView = new int[0];
+        final LinkedHashMap<Integer, SortKey> sortKeys = new LinkedHashMap<>();
+        int[] indexesModel;
+        int[] indexesView;
+        Object[][] data1;
         boolean isSorted = true;
 
         {
@@ -307,25 +308,24 @@ public class Main {
 
         @Override
         public void toggleSortOrder(int column) {
-          boolean isPresent = false;
-          for (Iterator<SortKey> it = sortKeys.iterator(); it.hasNext(); ) {
-            SortKey sortKey = it.next();
-            if (sortKey.getColumn() == column) {
-              isPresent = true;
-              it.remove();
-              sortKeys.add(
-                  0,
-                  new SortKey(
-                      column,
-                      sortKey.getSortOrder() == SortOrder.ASCENDING
-                          ? SortOrder.DESCENDING
-                          : SortOrder.ASCENDING));
-              break;
-            }
+          SortKey old = sortKeys.get(column);
+          if (old == null) {
+            old = new SortKey(column, SortOrder.DESCENDING);
+          } else {
+            sortKeys.remove(column);
           }
-          if (!isPresent) {
-            sortKeys.add(0, new SortKey(column, SortOrder.ASCENDING));
-          }
+
+          LinkedHashMap<Integer, SortKey> temp = new LinkedHashMap<>(sortKeys);
+          sortKeys.clear();
+          sortKeys.put(
+              column,
+              new SortKey(
+                  column,
+                  old.getSortOrder() == SortOrder.ASCENDING
+                      ? SortOrder.DESCENDING
+                      : SortOrder.ASCENDING));
+          sortKeys.putAll(temp);
+
           updateIndexes();
         }
 
@@ -344,12 +344,14 @@ public class Main {
         @Override
         public void setSortKeys(List<? extends SortKey> keys) {
           sortKeys.clear();
-          sortKeys.addAll(keys);
+          for (SortKey key : keys) {
+            sortKeys.put(key.getColumn(), key);
+          }
         }
 
         @Override
         public List<? extends SortKey> getSortKeys() {
-          return new ArrayList<>(sortKeys);
+          return new ArrayList<>(sortKeys.values());
         }
 
         @Override
@@ -393,14 +395,13 @@ public class Main {
         }
 
         private void updateIndexes() {
-          if (indexesModel.length != getModelRowCount()
-              || indexesView.length != getModelRowCount()) {
-            indexesModel = new int[getModelRowCount()];
-            indexesView = new int[getModelRowCount()];
-            for (int i = 0; i < getModelRowCount(); i++) {
-              indexesModel[i] = i;
-              indexesView[i] = i;
-            }
+          indexesModel = new int[getModelRowCount()];
+          indexesView = new int[getModelRowCount()];
+          data1 = new Object[getModelRowCount()][2];
+          for (int i = 0; i < getModelRowCount(); i++) {
+            indexesModel[i] = i;
+            indexesView[i] = i;
+            data1[i][0] = i;
           }
           isSorted = false;
         }
@@ -410,16 +411,13 @@ public class Main {
             return;
           }
           isSorted = true;
-          for (int j = sortKeys.size() - 1; j >= 0; j--) {
-            SortKey sortKey = sortKeys.get(j);
+          Object[] values = sortKeys.values().toArray();
+          for (int j = values.length - 1; j >= 0; j--) {
+            SortKey sortKey = (SortKey) values[j];
             if (sortKey.getSortOrder() == SortOrder.UNSORTED) {
               continue;
             }
             int column = sortKey.getColumn();
-            Object[][] data1 = new Object[getModelRowCount()][2];
-            for (int i = 0; i < getModelRowCount(); i++) {
-              data1[convertRowIndexToView(i)][0] = i;
-            }
             int type;
             switch (column) {
               case 0, 1, 11 -> {
@@ -468,19 +466,22 @@ public class Main {
               }
               default -> throw new IllegalStateException("Unexpected column value: " + column);
             }
-            int finalType = type;
-            Arrays.sort(
-                data1,
-                (o1, o2) -> {
-                  int result;
-                  switch (finalType) {
-                    case 0 -> result = ((String) o1[1]).compareTo((String) o2[1]);
-                    case 1 -> result = Double.compare((double) o1[1], (double) o2[1]);
-                    case 2 -> result = Integer.compare((int) o1[1], (int) o2[1]);
-                    default -> throw new IllegalStateException();
-                  }
-                  return sortKey.getSortOrder() == SortOrder.ASCENDING ? result : -result;
-                });
+            int finalType = 2 * type + (sortKey.getSortOrder() == SortOrder.DESCENDING ? 1 : 0);
+            switch (finalType) {
+              case 0 -> Arrays.sort(data1, Comparator.comparing(o -> (String) o[1]));
+              case 1 ->
+                  Arrays.sort(
+                      data1, Comparator.comparing(o -> (String) o[1], Comparator.reverseOrder()));
+              case 2 -> Arrays.sort(data1, Comparator.comparing(o -> (Double) o[1]));
+              case 3 ->
+                  Arrays.sort(
+                      data1, Comparator.comparing(o -> (Double) o[1], Comparator.reverseOrder()));
+              case 4 -> Arrays.sort(data1, Comparator.comparing(o -> (Integer) o[1]));
+              case 5 ->
+                  Arrays.sort(
+                      data1, Comparator.comparing(o -> (Integer) o[1], Comparator.reverseOrder()));
+              default -> throw new IllegalStateException();
+            }
             for (int i = 0; i < getModelRowCount(); i++) {
               indexesModel[(int) data1[i][0]] = i;
               indexesView[i] = (int) data1[i][0];
