@@ -308,14 +308,24 @@ public class Main {
 
         @Override
         public void toggleSortOrder(int column) {
-          sortKeys.computeIfAbsent(column, k -> new SortKey(column, SortOrder.DESCENDING));
-          sortKeys.putFirst(
+          SortKey old = sortKeys.get(column);
+          if (old == null) {
+            old = new SortKey(column, SortOrder.DESCENDING);
+          } else {
+            sortKeys.remove(column);
+          }
+
+          LinkedHashMap<Integer, SortKey> temp = new LinkedHashMap<>(sortKeys);
+          sortKeys.clear();
+          sortKeys.put(
               column,
               new SortKey(
                   column,
-                  sortKeys.get(column).getSortOrder() == SortOrder.ASCENDING
+                  old.getSortOrder() == SortOrder.ASCENDING
                       ? SortOrder.DESCENDING
                       : SortOrder.ASCENDING));
+          sortKeys.putAll(temp);
+
           updateIndexes();
         }
 
