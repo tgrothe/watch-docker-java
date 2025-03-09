@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableColumn;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 import net.schmizz.sshj.connection.channel.direct.Signal;
@@ -28,7 +29,7 @@ public class Main {
     JOptionPane.showMessageDialog(null, e.getMessage());
   }
 
-  private static final String versionNumber = "v0.8";
+  private static final String versionNumber = "v0.9";
 
   private static final String HOST;
   private static final int PORT;
@@ -499,12 +500,13 @@ public class Main {
   private static void showGUI() {
     FlatDarkLaf.installLafInfo();
     for (UIManager.LookAndFeelInfo laf : UIManager.getInstalledLookAndFeels()) {
-      if (laf.getName().contains("FlatLaf Dark")) {
+      if ("FlatLaf Dark".equals(laf.getName())) {
         try {
           UIManager.setLookAndFeel(laf.getClassName());
         } catch (Exception e) {
           logWarning(e);
         }
+        break;
       }
     }
 
@@ -541,7 +543,7 @@ public class Main {
     frame.setLayout(new BorderLayout());
     frame.add(panel2, BorderLayout.NORTH);
     frame.add(scrollPane, BorderLayout.CENTER);
-    frame.setSize(1600, 800);
+    frame.setSize(1200, 600);
     frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
     frame.setVisible(true);
 
@@ -554,5 +556,8 @@ public class Main {
         .button4()
         .addActionListener(new CommandActionListener(frame, table, "docker restart"));
     buttonGroup.button5().addActionListener(new LogActionListener(table));
+
+    TableColumn nameColumn = table.getColumnModel().getColumn(table.convertColumnIndexToView(1));
+    nameColumn.setPreferredWidth((int) (nameColumn.getPreferredWidth() * 1.6));
   }
 }
