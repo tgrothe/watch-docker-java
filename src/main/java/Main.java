@@ -1,3 +1,4 @@
+import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -26,6 +27,8 @@ public class Main {
 
     JOptionPane.showMessageDialog(null, e.getMessage());
   }
+
+  private static final String versionNumber = "v0.8";
 
   private static final String HOST;
   private static final int PORT;
@@ -126,13 +129,13 @@ public class Main {
     }
   }
 
-  private record CommandActionListener(
-      JFrame frame, JTable table, MyTableModel model, String command) implements ActionListener {
+  private record CommandActionListener(JFrame frame, JTable table, String command)
+      implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
       int row = table.getSelectedRow();
       if (row != -1) {
-        String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
+        String containerId = (String) table.getValueAt(row, table.convertColumnIndexToView(0));
         MyConnection connection = new MyConnection();
         Session session = connection.getSession();
         try {
@@ -156,20 +159,21 @@ public class Main {
     }
   }
 
-  private record LogActionListener(JTable table, MyTableModel model) implements ActionListener {
+  private record LogActionListener(JTable table) implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
       int row = table.getSelectedRow();
       if (row != -1) {
-        String containerId = (String) model.getValueAt(table.convertRowIndexToModel(row), 0);
-        String isRunning = (String) model.getValueAt(table.convertRowIndexToModel(row), 11);
+        String containerId = (String) table.getValueAt(row, table.convertColumnIndexToView(0));
+        String isRunning = (String) table.getValueAt(row, table.convertColumnIndexToView(11));
 
         JFrame logsFrame = new JFrame("Logs " + containerId);
-        logsFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        logsFrame.setSize(1200, 600);
         JTextArea textArea = new JTextArea();
         textArea.setEditable(false);
         logsFrame.add(new JScrollPane(textArea));
+        logsFrame.setSize(1000, 600);
+        logsFrame.setLocationRelativeTo(null);
+        logsFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         logsFrame.setVisible(true);
 
         new Thread(
@@ -493,6 +497,17 @@ public class Main {
   }
 
   private static void showGUI() {
+    FlatDarkLaf.installLafInfo();
+    for (UIManager.LookAndFeelInfo laf : UIManager.getInstalledLookAndFeels()) {
+      if (laf.getName().contains("FlatLaf Dark")) {
+        try {
+          UIManager.setLookAndFeel(laf.getClassName());
+        } catch (Exception e) {
+          logWarning(e);
+        }
+      }
+    }
+
     ButtonGroup buttonGroup =
         new ButtonGroup(
             new JButton("Refresh"),
@@ -501,7 +516,7 @@ public class Main {
             new JButton("Restart"),
             new JButton("Show Logs"));
     buttonGroup.setEnabled(false);
-    JPanel panel1 = new JPanel(new GridLayout(1, 4));
+    JPanel panel1 = new JPanel(new GridLayout(1, 5));
     panel1.add(buttonGroup.button1());
     panel1.add(buttonGroup.button2());
     panel1.add(buttonGroup.button3());
@@ -522,24 +537,22 @@ public class Main {
               buttonGroup.setEnabled(table.getSelectedRow() != -1);
             });
     JScrollPane scrollPane = new JScrollPane(table);
-    JFrame frame = new JFrame("Docker Stats");
+    JFrame frame = new JFrame("Docker Stats " + versionNumber);
     frame.setLayout(new BorderLayout());
-    frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-    frame.setSize(1600, 800);
     frame.add(panel2, BorderLayout.NORTH);
     frame.add(scrollPane, BorderLayout.CENTER);
+    frame.setSize(1600, 800);
+    frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
     frame.setVisible(true);
 
     buttonGroup.button1().addActionListener(e -> model.update());
-    buttonGroup
-        .button2()
-        .addActionListener(new CommandActionListener(frame, table, model, "docker stop"));
+    buttonGroup.button2().addActionListener(new CommandActionListener(frame, table, "docker stop"));
     buttonGroup
         .button3()
-        .addActionListener(new CommandActionListener(frame, table, model, "docker start"));
+        .addActionListener(new CommandActionListener(frame, table, "docker start"));
     buttonGroup
         .button4()
-        .addActionListener(new CommandActionListener(frame, table, model, "docker restart"));
-    buttonGroup.button5().addActionListener(new LogActionListener(table, model));
+        .addActionListener(new CommandActionListener(frame, table, "docker restart"));
+    buttonGroup.button5().addActionListener(new LogActionListener(table));
   }
 }
