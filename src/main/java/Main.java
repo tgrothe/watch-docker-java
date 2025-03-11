@@ -5,7 +5,6 @@ import java.awt.event.ActionListener;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.List;
 import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
@@ -29,7 +28,7 @@ public class Main {
     JOptionPane.showMessageDialog(null, e.getMessage());
   }
 
-  private static final String versionNumber = "v0.9";
+  private static final String versionNumber = "v0.10";
 
   private static final String HOST;
   private static final int PORT;
@@ -55,7 +54,7 @@ public class Main {
     }
   }
 
-  public static class MyConnection {
+  private static class MyConnection {
     private final SSHClient ssh;
 
     public MyConnection() {
@@ -223,7 +222,186 @@ public class Main {
     }
   }
 
-  public static class MyTableModel extends AbstractTableModel {
+  private interface ModelValue extends Comparable<Object> {
+    void setValue(String value);
+  }
+
+  private static class ModelValueString implements ModelValue {
+    private String value = "";
+
+    @Override
+    public void setValue(String value) {
+      this.value = value;
+    }
+
+    @Override
+    public int compareTo(Object o) {
+      return value.compareTo(((ModelValueString) o).value);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) return false;
+
+      ModelValueString that = (ModelValueString) o;
+      return value.equals(that.value);
+    }
+
+    @Override
+    public int hashCode() {
+      return value.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return value;
+    }
+  }
+
+  private static class ModelValuePercent implements ModelValue {
+    private String value;
+    private double doubleValue;
+
+    @Override
+    public void setValue(String value) {
+      this.value = value;
+      doubleValue = Double.parseDouble(value.substring(0, value.length() - 1));
+    }
+
+    @Override
+    public int compareTo(Object o) {
+      return Double.compare(doubleValue, ((ModelValuePercent) o).doubleValue);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) return false;
+
+      ModelValuePercent that = (ModelValuePercent) o;
+      return Double.compare(doubleValue, that.doubleValue) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+      return Double.hashCode(doubleValue);
+    }
+
+    @Override
+    public String toString() {
+      return value;
+    }
+  }
+
+  private static class ModelValueByte implements ModelValue {
+    private String value;
+    private long longValue;
+
+    @Override
+    public void setValue(String value) {
+      this.value = value;
+      Object[][] temp = {
+        {"KiB", 1024L},
+        {"MiB", 1024L * 1024L},
+        {"GiB", 1024L * 1024L * 1024L},
+        {"kB", 1000L},
+        {"MB", 1000L * 1000L},
+        {"GB", 1000L * 1000L * 1000L},
+        {"B", 1L},
+        {"", 1L}
+      };
+      for (Object[] os : temp) {
+        if (value.endsWith((String) os[0])) {
+          longValue =
+              (long)
+                  (Double.parseDouble(
+                          value.substring(0, value.length() - ((String) os[0]).length()))
+                      * (Long) os[1]);
+          break;
+        }
+      }
+    }
+
+    @Override
+    public int compareTo(Object o) {
+      return Long.compare(longValue, ((ModelValueByte) o).longValue);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) return false;
+
+      ModelValueByte that = (ModelValueByte) o;
+      return longValue == that.longValue;
+    }
+
+    @Override
+    public int hashCode() {
+      return Long.hashCode(longValue);
+    }
+
+    @Override
+    public String toString() {
+      return value;
+    }
+  }
+
+  private static class ModelRow {
+    private final ModelValueString containerId = new ModelValueString();
+    private final ModelValueString name = new ModelValueString();
+    private final ModelValuePercent cpu = new ModelValuePercent();
+    private final ModelValueByte memUsage = new ModelValueByte();
+    private final ModelValueByte limit = new ModelValueByte();
+    private final ModelValuePercent mem = new ModelValuePercent();
+    private final ModelValueByte netI = new ModelValueByte();
+    private final ModelValueByte netO = new ModelValueByte();
+    private final ModelValueByte blockI = new ModelValueByte();
+    private final ModelValueByte blockO = new ModelValueByte();
+    private final ModelValueByte pid = new ModelValueByte();
+    private final ModelValueString run = new ModelValueString();
+
+    public ModelRow(String line) {
+      setValues(line);
+    }
+
+    private void setValues(String line) {
+      String[] rowData = line.split("\\s{2,}");
+      String[] temp1 = rowData[3].split(" / ");
+      String[] temp2 = rowData[5].split(" / ");
+      String[] temp3 = rowData[6].split(" / ");
+      containerId.setValue(rowData[0]);
+      name.setValue(rowData[1]);
+      cpu.setValue(rowData[2]);
+      memUsage.setValue(temp1[0]);
+      limit.setValue(temp1[1]);
+      mem.setValue(rowData[4]);
+      netI.setValue(temp2[0]);
+      netO.setValue(temp2[1]);
+      blockI.setValue(temp3[0]);
+      blockO.setValue(temp3[1]);
+      pid.setValue(rowData[7]);
+      run.setValue("0".equals(rowData[7]) ? "No" : "Yes");
+    }
+
+    public Object getValueAt(int columnIndex) {
+      return switch (columnIndex) {
+        case 0 -> containerId;
+        case 1 -> name;
+        case 2 -> cpu;
+        case 3 -> memUsage;
+        case 4 -> limit;
+        case 5 -> mem;
+        case 6 -> netI;
+        case 7 -> netO;
+        case 8 -> blockI;
+        case 9 -> blockO;
+        case 10 -> pid;
+        case 11 -> run;
+        default -> throw new IllegalArgumentException("Unexpected column value: " + columnIndex);
+      };
+    }
+  }
+
+  private static class MyTableModel extends AbstractTableModel {
     private final String[] columnNames = {
       "CONTAINER ID",
       "NAME",
@@ -239,7 +417,7 @@ public class Main {
       "RUNS"
     };
 
-    private final ArrayList<ArrayList<Object>> data = new ArrayList<>();
+    private final ArrayList<ModelRow> data = new ArrayList<>();
 
     public void update() {
       data.clear();
@@ -254,24 +432,7 @@ public class Main {
       if (line.startsWith("CONTAINER ID")) {
         return;
       }
-      String[] rowData = line.split("\\s{2,}");
-      String[] temp1 = rowData[3].split(" / ");
-      String[] temp2 = rowData[5].split(" / ");
-      String[] temp3 = rowData[6].split(" / ");
-      ArrayList<Object> row = new ArrayList<>();
-      row.add(rowData[0]);
-      row.add(rowData[1]);
-      row.add(rowData[2]);
-      row.add(temp1[0]);
-      row.add(temp1[1]);
-      row.add(rowData[4]);
-      row.add(temp2[0]);
-      row.add(temp2[1]);
-      row.add(temp3[0]);
-      row.add(temp3[1]);
-      row.add(rowData[7]);
-      row.add("0".equals(rowData[7]) ? "No" : "Yes");
-      data.add(row);
+      data.add(new ModelRow(line));
     }
 
     @Override
@@ -291,209 +452,12 @@ public class Main {
 
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
-      return data.get(rowIndex).get(columnIndex);
+      return data.get(rowIndex).getValueAt(columnIndex);
     }
 
-    public RowSorter<MyTableModel> getSorter() {
-      return new RowSorter<>() {
-        final LinkedHashMap<Integer, SortKey> sortKeys = new LinkedHashMap<>();
-        int[] indexesModel;
-        int[] indexesView;
-        Object[][] data1;
-        boolean isSorted = true;
-
-        {
-          updateIndexes();
-        }
-
-        @Override
-        public MyTableModel getModel() {
-          return MyTableModel.this;
-        }
-
-        @Override
-        public void toggleSortOrder(int column) {
-          SortKey old = sortKeys.get(column);
-          if (old == null) {
-            old = new SortKey(column, SortOrder.DESCENDING);
-          } else {
-            sortKeys.remove(column);
-          }
-
-          LinkedHashMap<Integer, SortKey> temp = new LinkedHashMap<>(sortKeys);
-          sortKeys.clear();
-          sortKeys.put(
-              column,
-              new SortKey(
-                  column,
-                  old.getSortOrder() == SortOrder.ASCENDING
-                      ? SortOrder.DESCENDING
-                      : SortOrder.ASCENDING));
-          sortKeys.putAll(temp);
-
-          updateIndexes();
-        }
-
-        @Override
-        public int convertRowIndexToModel(int index) {
-          sort();
-          return indexesView[index];
-        }
-
-        @Override
-        public int convertRowIndexToView(int index) {
-          sort();
-          return indexesModel[index];
-        }
-
-        @Override
-        public void setSortKeys(List<? extends SortKey> keys) {
-          sortKeys.clear();
-          for (SortKey key : keys) {
-            sortKeys.put(key.getColumn(), key);
-          }
-        }
-
-        @Override
-        public List<? extends SortKey> getSortKeys() {
-          return new ArrayList<>(sortKeys.values());
-        }
-
-        @Override
-        public int getViewRowCount() {
-          return getRowCount();
-        }
-
-        @Override
-        public int getModelRowCount() {
-          return getRowCount();
-        }
-
-        @Override
-        public void modelStructureChanged() {
-          updateIndexes();
-        }
-
-        @Override
-        public void allRowsChanged() {
-          updateIndexes();
-        }
-
-        @Override
-        public void rowsInserted(int firstRow, int endRow) {
-          updateIndexes();
-        }
-
-        @Override
-        public void rowsDeleted(int firstRow, int endRow) {
-          updateIndexes();
-        }
-
-        @Override
-        public void rowsUpdated(int firstRow, int endRow) {
-          updateIndexes();
-        }
-
-        @Override
-        public void rowsUpdated(int firstRow, int endRow, int column) {
-          updateIndexes();
-        }
-
-        private void updateIndexes() {
-          indexesModel = new int[getModelRowCount()];
-          indexesView = new int[getModelRowCount()];
-          data1 = new Object[getModelRowCount()][2];
-          for (int i = 0; i < getModelRowCount(); i++) {
-            indexesModel[i] = i;
-            indexesView[i] = i;
-            data1[i][0] = i;
-          }
-          isSorted = false;
-        }
-
-        private void sort() {
-          if (isSorted) {
-            return;
-          }
-          isSorted = true;
-          Object[] values = sortKeys.values().toArray();
-          for (int j = values.length - 1; j >= 0; j--) {
-            SortKey sortKey = (SortKey) values[j];
-            if (sortKey.getSortOrder() == SortOrder.UNSORTED) {
-              continue;
-            }
-            int column = sortKey.getColumn();
-            int type;
-            switch (column) {
-              case 0, 1, 11 -> {
-                for (int i = 0; i < getModelRowCount(); i++) {
-                  data1[convertRowIndexToView(i)][1] = getValueAt(i, column);
-                }
-                type = 0;
-              }
-              case 2, 5 -> {
-                for (int i = 0; i < getModelRowCount(); i++) {
-                  String s = (String) getValueAt(i, column);
-                  data1[convertRowIndexToView(i)][1] =
-                      Double.parseDouble(s.substring(0, s.length() - 1));
-                }
-                type = 1;
-              }
-              case 3, 4, 6, 7, 8, 9 -> {
-                Object[][] temp = {
-                  {"KiB", 1024L},
-                  {"MiB", 1024L * 1024L},
-                  {"GiB", 1024L * 1024L * 1024L},
-                  {"kB", 1000L},
-                  {"MB", 1000L * 1000L},
-                  {"GB", 1000L * 1000L * 1000L},
-                  {"B", 1L}
-                };
-                for (int i = 0; i < getModelRowCount(); i++) {
-                  String s = (String) getValueAt(i, column);
-                  for (Object[] os : temp) {
-                    if (s.endsWith((String) os[0])) {
-                      data1[convertRowIndexToView(i)][1] =
-                          Double.parseDouble(s.substring(0, s.length() - ((String) os[0]).length()))
-                              * (Long) os[1];
-                      break;
-                    }
-                  }
-                }
-                type = 1;
-              }
-              case 10 -> {
-                for (int i = 0; i < getModelRowCount(); i++) {
-                  data1[convertRowIndexToView(i)][1] =
-                      Integer.parseInt((String) getValueAt(i, column));
-                }
-                type = 2;
-              }
-              default -> throw new IllegalStateException("Unexpected column value: " + column);
-            }
-            int finalType = 2 * type + (sortKey.getSortOrder() == SortOrder.DESCENDING ? 1 : 0);
-            switch (finalType) {
-              case 0 -> Arrays.sort(data1, Comparator.comparing(o -> (String) o[1]));
-              case 1 ->
-                  Arrays.sort(
-                      data1, Comparator.comparing(o -> (String) o[1], Comparator.reverseOrder()));
-              case 2 -> Arrays.sort(data1, Comparator.comparing(o -> (Double) o[1]));
-              case 3 ->
-                  Arrays.sort(
-                      data1, Comparator.comparing(o -> (Double) o[1], Comparator.reverseOrder()));
-              case 4 -> Arrays.sort(data1, Comparator.comparing(o -> (Integer) o[1]));
-              case 5 ->
-                  Arrays.sort(
-                      data1, Comparator.comparing(o -> (Integer) o[1], Comparator.reverseOrder()));
-              default -> throw new IllegalStateException();
-            }
-            for (int i = 0; i < getModelRowCount(); i++) {
-              indexesModel[(int) data1[i][0]] = i;
-              indexesView[i] = (int) data1[i][0];
-            }
-          }
-        }
-      };
+    @Override
+    public Class<?> getColumnClass(int columnIndex) {
+      return ModelValue.class;
     }
   }
 
@@ -528,7 +492,7 @@ public class Main {
     panel2.add(panel1, BorderLayout.WEST);
     MyTableModel model = new MyTableModel();
     JTable table = new JTable(model);
-    table.setRowSorter(model.getSorter());
+    table.setAutoCreateRowSorter(true);
     table
         .getSelectionModel()
         .addListSelectionListener(
