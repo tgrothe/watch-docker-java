@@ -28,8 +28,6 @@ public class Main {
     JOptionPane.showMessageDialog(null, e.getMessage());
   }
 
-  private static final String versionNumber = "v0.10";
-
   private static final String HOST;
   private static final int PORT;
   private static final String USERNAME;
@@ -135,7 +133,7 @@ public class Main {
     public void actionPerformed(ActionEvent e) {
       int row = table.getSelectedRow();
       if (row != -1) {
-        String containerId = (String) table.getValueAt(row, table.convertColumnIndexToView(0));
+        String containerId = table.getValueAt(row, table.convertColumnIndexToView(0)).toString();
         MyConnection connection = new MyConnection();
         Session session = connection.getSession();
         try {
@@ -164,8 +162,8 @@ public class Main {
     public void actionPerformed(ActionEvent e) {
       int row = table.getSelectedRow();
       if (row != -1) {
-        String containerId = (String) table.getValueAt(row, table.convertColumnIndexToView(0));
-        String isRunning = (String) table.getValueAt(row, table.convertColumnIndexToView(11));
+        String containerId = table.getValueAt(row, table.convertColumnIndexToView(0)).toString();
+        String isRunning = table.getValueAt(row, table.convertColumnIndexToView(11)).toString();
 
         JFrame logsFrame = new JFrame("Logs " + containerId);
         JTextArea textArea = new JTextArea();
@@ -503,7 +501,7 @@ public class Main {
               buttonGroup.setEnabled(table.getSelectedRow() != -1);
             });
     JScrollPane scrollPane = new JScrollPane(table);
-    JFrame frame = new JFrame("Docker Stats " + versionNumber);
+    JFrame frame = new JFrame("Docker Stats GUI");
     frame.setLayout(new BorderLayout());
     frame.add(panel2, BorderLayout.NORTH);
     frame.add(scrollPane, BorderLayout.CENTER);
