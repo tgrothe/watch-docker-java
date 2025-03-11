@@ -28,7 +28,7 @@ public class Main {
     JOptionPane.showMessageDialog(null, e.getMessage());
   }
 
-  private static final String versionNumber = "v0.9";
+  private static final String versionNumber = "v0.10";
 
   private static final String HOST;
   private static final int PORT;
