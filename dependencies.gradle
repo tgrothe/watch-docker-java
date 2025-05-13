@@ -1,8 +1,10 @@
 ext {
+    // Plugins:
     spotlessVersion = '7.0.3'
     benmanesVersion = '0.52.0'
     spotbugsVersion = '6.1.11'
 
+    // Dependencies:
     depsArray = [
             lang3: 'org.apache.commons:commons-lang3:3.17.0',
             sshj : 'com.hierynomus:sshj:0.39.0',
