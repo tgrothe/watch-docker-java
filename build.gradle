@@ -9,8 +9,6 @@ plugins {
     id 'com.github.spotbugs' version "${spotbugsVersion}"
 }
 
-//version = '1.0'
-
 application {
     mainClass.set(System.getProperty('main_class') ?: 'Main')
 }
@@ -43,7 +41,7 @@ spotless {
 jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
-        attributes 'Main-Class': 'Main'
+        attributes 'Main-Class': application.getMainClass()
     }
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
