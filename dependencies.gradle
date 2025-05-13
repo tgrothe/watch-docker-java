@@ -7,7 +7,7 @@ ext {
     // Dependencies:
     depsArray = [
             lang3: 'org.apache.commons:commons-lang3:3.17.0',
-            sshj : 'com.hierynomus:sshj:0.39.0',
+            sshj : 'com.hierynomus:sshj:0.40.0',
             laf  : 'com.formdev:flatlaf:3.6'
     ]
 }
