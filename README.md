@@ -9,7 +9,7 @@ This application allows you to monitor Docker containers on a remote host using 
 1. Java 17 or higher installed on your machine.
 2. Docker installed on the remote host.
 3. SSH key-based authentication set up between your machine and the remote host.
-4. A file named `my_host_data.txt` containing the hostname, port, and username (one per row/row-wise) of the remote host.
+4. A file named `my_host_data.txt` containing the hostname, port, and username (one per line) of the remote host.
 
 ## Usage
 
