@@ -2,7 +2,7 @@ ext {
     // Plugins:
     spotlessVersion = '7.0.4'
     benmanesVersion = '0.52.0'
-    spotbugsVersion = '6.1.11'
+    spotbugsVersion = '6.1.13'
 
     // Dependencies:
     depsArray = [
