@@ -1,12 +1,11 @@
 buildscript {
-    apply from: 'dependencies.gradle'
 }
 
 plugins {
     id 'application'
-    id 'com.diffplug.spotless' version "${spotlessVersion}"
-    id 'com.github.ben-manes.versions' version "${benmanesVersion}"
-    id 'com.github.spotbugs' version "${spotbugsVersion}"
+    id 'com.diffplug.spotless' version '7.0.4'
+    id 'com.github.ben-manes.versions' version '0.52.0'
+    id 'com.github.spotbugs' version '6.1.13'
 }
 
 application {
@@ -18,12 +17,9 @@ repositories {
 }
 
 dependencies {
-    // https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
     implementation 'org.slf4j:slf4j-simple:2.0.17'
-
-    implementation depsArray.lang3
-    implementation depsArray.sshj
-    implementation depsArray.laf
+    implementation 'com.hierynomus:sshj:0.40.0'
+    implementation 'com.formdev:flatlaf:3.6'
 }
 
 java {
