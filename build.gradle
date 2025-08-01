@@ -19,7 +19,7 @@ repositories {
 dependencies {
     implementation 'org.slf4j:slf4j-simple:2.0.17'
     implementation 'com.hierynomus:sshj:0.40.0'
-    implementation 'com.formdev:flatlaf:3.6'
+    implementation 'com.formdev:flatlaf:3.6.1'
 }
 
 java {
